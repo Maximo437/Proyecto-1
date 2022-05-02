@@ -1,0 +1,177 @@
+# General 
+#referencias https://rpubs.com/daniballari/ggplot  https://www.statology.org/k-means-clustering-in-r/ https://r-lang.com/r-duplicated-function-with-example/  https://uc-r.github.io/kmeans_clustering 
+# importamos librerías y llamamos el lugar del directorio para los datos, no es necesario instalar los paquetes si ya los tiene instalados. 
+install.packages("writexl")
+install.packages(tidyverse)
+install.packages(dbscan)
+install.packages("dplyr")
+install.packages(ggplot2)
+install.packages(cluster)
+
+#instalacion de paquetes y librerias
+library("writexl")
+library(tidyverse)
+library(dbscan)
+library("dplyr")
+library(ggplot2)
+library(cluster)
+
+
+#K-MEANS :
+#path y lectura de la dataframe (poner el directorio donde esta su data, ya que esta es la mia)
+setwd("C:/Users/maxit/Downloads")
+data <- readRDS("beats.rds")
+
+#definimos una seed para que los datos no sean aleatorios cada vez, en este paso se puede poner "%>% sample_frac(0.10)" al lado de data para fraccionar los datos, de esta forma no se demoraria tanto en los graficos, pero, para dbscan no seria representativo, porque dbscan depende mucho de la cantidad de puntos.
+set.seed(69420)
+dataprueba <- data
+
+#limpio los datos sacando las canciones que podrian estar duplicadas en varios album, esto lo vi al revisar el track id en la data.
+dataclean <- dataprueba[!duplicated(dataprueba$track_name),]
+
+# luego tomamos 2 variables que encontramos relevantes, habian varias, pero inicialmente intentamos con varias para que nos mostraran clusters utiles, pero estos no siempres resultaban ser muy buenos, por esto decidimos ocupar los que tuvieran rango parecidos, este fue energy y danceability además al ser identificadores buenos provistos por el mismo spotify, deberían ser fiables a la hora de elegir musica similar. aqui omito los NA de la seleccion. 
+#Danceability y energy son 2 variables relacionables ya que se pueden diferenciar para hacer playlists con distintos proposito, danceablity estudia los patrones de ritmo para ver que tan "bailable" es la cancion, mientras que energy es la "vigorosidad" que tiene la cancion, osea que tanta actividad y que tan ruidosa es la cancion.
+dataselect  <- select(dataclean, energy, danceability)
+dataselect  <- na.omit(dataselect)
+
+#veo y uso el metodo del codo de los datos para ver que tantos cluster debo realizar este lo saque de las clases para medir el codo 
+SSinterior <- numeric(20)
+for(k in 1:20){
+  modelo <- kmeans(dataselect, centers = k)
+  SSinterior[k] <- modelo$tot.withinss
+}
+SSinterior
+plot(SSinterior)
+ggplot() + geom_point(aes(x = 1:20, y = SSinterior), color = 'blue') + 
+  geom_line(aes(x = 1:20, y = SSinterior), color = 'blue') + 
+  ggtitle("Metodo del codo") + 
+  xlab('Centroides') + 
+  ylab('WCSS')
+
+# utilizamos algoritmo k-means, especificamos entre 5 clusters por el metodo del codo, ocupamos nstart default.
+kmeansdata <- kmeans(dataselect, centers = 5)
+
+# creamos una columna con el valor de cluster de kmeans.
+dataselect$cluster <- kmeansdata$cluster %>% as.factor()
+
+#graficamos con ggplot
+ggplot(dataselect, aes(energy, danceability, color = cluster)) +
+  geom_point(alpha = 0.5) +
+  theme_bw()
+  
+#Genero un dataframe final conteniendo los contenidos de relevancia para hacer la lista al final, que son el tiempo, el nombre de la cancion y el nombre de la artista.
+datameanfinal <- cbind(dataselect, track_name = dataclean$track_name)  
+datameanfinal <- cbind(datameanfinal, artist_name = dataclean$artist_name) 
+datameanfinal <- cbind(datameanfinal, duration_ms = dataclean$duration_ms)   
+
+
+
+
+# DBSCAN:
+
+# ocupo las librerias de antes mas dbscan, y el mismo seed, por lo que no cambia mucho en ese aspecto, la mayoria de las condiciones las dejamos similares a exepcion del metodo general.
+
+#path y lectura de la dataframe (poner el directorio donde esta su data, ya que esta es la mia)
+setwd("C:/Users/maxit/Downloads")
+data2 <- readRDS("beats.rds")
+
+# en el caso de la explicación creamos un sample, pero en la primera entrega, que es el codigo sin explicar, ocupamos toda la data original, ya que, no es necesario graficar, que es lo que más demora, ya que, el output es la lista, no los graficos. definimos una seed para que los datos no sean aleatorios cada vez
+set.seed(69420)
+dataprueba2 <- data2 
+
+#limpio los datos sacando las canciones que podrian estar duplicadas en varios album, esto lo vi al revisar el track id en la data.
+dataclean2 <- dataprueba2[!duplicated(dataprueba2$track_name),]
+
+# luego tomamos 2 variables que encontramos relevantes, habian varias, pero inicialmente intentamos con varias para que nos mostraran clusters utiles, pero estos no siempres resultaban ser muy buenos, por esto decidimos ocupar los que tuvieran rango parecidos, este fue energy y danceability además al ser identificadores buenos provistos por el mismo spotify, deberían ser fiables a la hora de elegir musica similar. aqui omito los NA de la seleccion.
+dataselect2  <- select(dataclean2, energy, danceability)
+dataselect2  <- na.omit(dataselect2)
+
+#Utilizamos knn para ver el codo para el valor de epsilon el cual es en el quiebre de la curva y desde ahi probar con los valores de k, para k no hay un metodo especifico además de ver la dimensionalidad, la cual no funciono muy bien, por lo que probe de 50 en 50 hasta quedar satisfecho con el resultado en el KNN. 
+#referencia = https://www.rdocumentation.org/packages/dbscan/versions/0.9-0/topics/kNNdistplot
+kNNdistplot(dataselect2, k = 500)
+# nos dimos cuenta que el K al llegar a mayor de 500 generaba clusters razonables, por lo que nos quedamos con 500, esto puede deberse a la gran cantidad de datos.
+
+# utilizamos el algoritmo DBSCAN
+dbscandata <- dbscan(dataselect2, eps = .025, minPts = 500)
+
+# formamos una columna como en el caso anterior con el valor del cluster para identificarlo y graficarlo
+dataselect2$cluster <- dbscandata$cluster %>% as.factor()
+
+#graficamos con ggplot
+ggplot(dataselect2, aes(energy, danceability, color = cluster)) +
+  geom_point(alpha = 0.5) +
+  theme_bw()
+
+#Genero un dataframe final conteniendo los contenidos de relevancia para hacer la lista al final, que son el tiempo, el nombre de la cancion y el nombre de la artista.
+datascanfinal <- cbind(dataselect2, track_name = dataclean2$track_name)  
+datascanfinal <- cbind(datascanfinal, artist_name = dataclean2$artist_name) 
+datascanfinal <- cbind(datascanfinal, duration_ms = dataclean2$duration_ms)   
+
+
+
+
+#  CREACION DEL ALGORITMO
+
+#input de la cancion de base para crear la lista
+input <- readline(prompt="Ponga nombre de la canción o nombre del artista/grupo (tener en cuenta mayusculas y minusculas): ") 
+
+# Creacion de la lista de reproducción
+# KMEANS
+#aqui añado el numero de cluster de la cancion seleccionada, luego genero una matriz con todas las canciones del cluster para despues aplicarle la restriccion de tiempo
+#aqui utilizamos un "or" que significa que si el de la derecha es null, el de la izquierda se utiliza y viceversa.
+cancion <- datameanfinal[(datameanfinal$artist_name == input | datameanfinal$track_name == input), ] 
+
+#aqui descubrimos que al poner un artista se complicaba por lo que decidimos usar un header, para que solo tome la primera cancion
+cancion <- head(cancion, 1)
+ncluster<- as.numeric(cancion[3])
+clusterframe <- datameanfinal[datameanfinal$cluster == ncluster, ]
+
+#ahora creamos el algoritmo para agregar las canciones
+timelimit <- 10800000
+listtime <- 0
+i<-1
+listafinal <-data.frame()
+
+while (listtime < timelimit) {
+	listafinal <- rbind(listafinal, clusterframe[i, ])
+	listtime <- sum(listafinal$duration_ms)
+	i <- i+1  
+	}
+
+listafinal  <- select(listafinal, artist_name, track_name,duration_ms)
+print(listafinal)	
+print(paste("Duracion de la playlist: ",listtime/3.6e+6, " horas y tiene un numero de canciones de: ",i-1))
+
+# DBSCAN
+#aqui añado el numero de cluster de la cancion seleccionada, luego genero una matriz con todas las canciones del cluster para despues aplicarle la restriccion de tiempo
+cancion2 <- datascanfinal[(datascanfinal$artist_name == input | datascanfinal$track_name == input), ]
+cancion2 <- head(cancion, 1)
+ncluster2<- as.numeric(cancion[3])
+clusterframe2 <- datascanfinal[datascanfinal$cluster == ncluster, ]
+
+#ahora creamos el algoritmo para agregar las canciones
+timelimit2 <- 10800000
+listtime2 <- 0
+j<-1
+listafinal2 <-data.frame()
+
+while (listtime2 < timelimit2) {
+	listafinal2 <- rbind(listafinal2, clusterframe2[j, ])
+	listtime2 <- sum(listafinal2$duration_ms)
+	j <- j+1  
+	}
+	
+listafinal2  <- select(listafinal2, artist_name, track_name,duration_ms)
+print(listafinal2)	
+print(paste("Duracion de la playlist: ",listtime2/3.6e+6, " horas y tiene un numero de canciones de: ",j-1))
+
+#guardo las listas en los output finales, para que se comprenda mejor cual es cual
+lista_kmeans <- listafinal
+lista_dbscan <- listafinal2
+
+#las variables de lista de output son lista_kmeans y lista_dbscan
+
+#Observaciones
+#Nosotros elegimos la version de kmeans, ya que, este tiene clusters mucho más diferenciables y de un tamaño relativamente similar, mientras que, dbscan produce un grafico en el que el cluster numero 0 consume la mayoria de los datos, ademas al cambiar los parametros, esto generalmente empeora generando cluster diminutos y 1 muy grande que consume los demas datos. Por lo tanto, la lista final de entrega es lista_kmeans la cual se descargara en un excel en el directorio seleccionado (donde esta la data).
+write_xlsx(lista_kmeans,"Playlist.xlsx")
+

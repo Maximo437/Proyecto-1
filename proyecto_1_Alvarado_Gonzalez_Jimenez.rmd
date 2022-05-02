@@ -1,0 +1,72 @@
+#all
+library("writexl")
+library(tidyverse)
+library(dbscan)
+library("dplyr")
+library(ggplot2)
+library(cluster)
+setwd("C:/Users/maxit/Downloads")
+data <- readRDS("beats.rds")
+set.seed(69420)
+dataprueba <- data
+dataclean <- dataprueba[!duplicated(dataprueba$track_name),]
+dataselect  <- select(dataclean, energy, danceability)
+dataselect  <- na.omit(dataselect)
+kmeansdata <- kmeans(dataselect, centers = 5)
+dataselect$cluster <- kmeansdata$cluster %>% as.factor()
+datameanfinal <- cbind(dataselect, track_name = dataclean$track_name)  
+datameanfinal <- cbind(datameanfinal, artist_name = dataclean$artist_name) 
+datameanfinal <- cbind(datameanfinal, duration_ms = dataclean$duration_ms)   
+setwd("C:/Users/maxit/Downloads")
+data2 <- readRDS("beats.rds")
+set.seed(69420)
+dataprueba2 <- data2 
+dataclean2 <- dataprueba2[!duplicated(dataprueba2$track_name),]
+dataselect2  <- select(dataclean2, energy, danceability)
+dataselect2  <- na.omit(dataselect2)
+dbscandata <- dbscan(dataselect2, eps = .025, minPts = 500)
+dataselect2$cluster <- dbscandata$cluster %>% as.factor()
+datascanfinal <- cbind(dataselect2, track_name = dataclean2$track_name)  
+datascanfinal <- cbind(datascanfinal, artist_name = dataclean2$artist_name) 
+datascanfinal <- cbind(datascanfinal, duration_ms = dataclean2$duration_ms)   
+input <- readline(prompt="Ponga nombre de la canci?n o nombre del artista/grupo (tener en cuenta mayusculas y minusculas): ") 
+
+#lo demas
+cancion <- datameanfinal[(datameanfinal$artist_name == input | datameanfinal$track_name == input), ] 
+cancion <- head(cancion, 1)
+ncluster<- as.numeric(cancion[3])
+clusterframe <- datameanfinal[datameanfinal$cluster == ncluster, ]
+timelimit <- 10800000
+listtime <- 0
+i<-1
+listafinal <-data.frame()
+while (listtime < timelimit) {
+  listafinal <- rbind(listafinal, clusterframe[i, ])
+  listtime <- sum(listafinal$duration_ms)
+  i <- i+1  
+}
+listafinal  <- select(listafinal, artist_name, track_name,duration_ms)
+print(listafinal)	
+print(paste("Duracion de la playlist K-MEANS: ",listtime/3.6e+6, " horas y tiene un numero de canciones de: ",i-1))
+cancion2 <- datascanfinal[(datascanfinal$artist_name == input | datascanfinal$track_name == input), ]
+cancion2 <- head(cancion, 1)
+ncluster2<- as.numeric(cancion[3])
+clusterframe2 <- datascanfinal[datascanfinal$cluster == ncluster, ]
+timelimit2 <- 10800000
+listtime2 <- 0
+j<-1
+listafinal2 <-data.frame()
+while (listtime2 < timelimit2) {
+  listafinal2 <- rbind(listafinal2, clusterframe2[j, ])
+  listtime2 <- sum(listafinal2$duration_ms)
+  j <- j+1  
+}
+listafinal2  <- select(listafinal2, artist_name, track_name,duration_ms)
+print(listafinal2)	
+print(paste("Duracion de la playlist DBSCAN: ",listtime2/3.6e+6, " horas y tiene un numero de canciones de: ",j-1))
+lista_kmeans <- listafinal
+lista_dbscan <- listafinal2
+print(lista_kmeans)
+print(listafinal)	
+print(paste("Duracion de la playlist: ",listtime/3.6e+6, " horas y tiene un numero de canciones de: ",i-1))
+write_xlsx(lista_kmeans,"Playlist.xlsx")
